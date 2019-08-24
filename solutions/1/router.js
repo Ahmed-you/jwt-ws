@@ -1,92 +1,46 @@
-'use strict';
+"use strict";
 
-const { readFile } = require('fs');
-const { parse } = require('cookie');
-const { sign, verify } = require('jsonwebtoken');
+const path = require("path");
+const { sign, verify } = require("jsonwebtoken");
+const router = require("express").Router();
 
-const SECRET = 'poiugyfguhijokpkoihugyfyguhijo';
+const SECRET = "poiugyfguhijokpkoihugyfyguhijo";
 
-const userDetails = { userId: 5, role: 'admin' };
+const userDetails = { userId: 5, role: "admin" };
 
-const notFoundPage = '<p style="font-size: 10vh; text-align: center;">404!</p>';
+router.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
-module.exports = (req, res) => {
-  switch (`${req.method} ${req.url}`) {
-    case 'GET /':
-      return readFile(
-        './index.html',
-        (err, data) => {
-          res.writeHead(
-            200,
-            {
-              'Content-Type': 'text/html',
-              'Content-Length': data.length
-            }
-          );
-          return res.end(data);
-        }
-      );
-    case 'POST /login':
-      const cookie = sign(userDetails, SECRET);
-      res.writeHead(
-        302,
-        {
-          'Location': '/',
-          'Set-Cookie': `jwt=${cookie}; HttpOnly`
-        }
-      );
-      return res.end();
-    case 'POST /logout':
-      res.writeHead(
-        302,
-        {
-          'Location': '/',
-          'Set-Cookie': 'jwt=0; Max-Age=0'
-        }
-      );
-      return res.end();
-    case 'GET /auth_check':
-      const send401 = () => {
-        const message = 'fail!';
-        res.writeHead(
-          401,
-          {
-            'Content-Type': 'text/plain',
-            'Content-Length': message.length
-          }
-        );
-        return res.end(message);
-      }
+router.post("/login", (req, res) => {
+  const cookie = sign(userDetails, SECRET);
+  res.cookie("jwt", cookie, { httpOnly: true });
+  res.redirect("/");
+});
 
-      if (!req.headers.cookie) return send401();
+router.post("/logout", (req, res) => {
+  res.clearCookie("jwt");
+  res.redirect("/");
+});
 
-      const { jwt } = parse(req.headers.cookie);
+router.get("/auth_check", (req, res) => {
+  const send401 = () => {
+    const message = "fail!";
+    res.set("Content-Length", message.length);
+    res.status(401).send(message);
+  };
 
-      if (!jwt) return send401();
+  if (!req.cookies) return send401();
 
-      return verify(jwt, SECRET, (err, jwt) => {
-        if (err) {
-          return send401();
-        } else {
-          const message = `Your user id is: ${jwt.userId}`;
-          res.writeHead(
-            200,
-            {
-              'Content-Type': 'text/plain',
-              'Content-Length': message.length
-            }
-          );
-          return res.end(message);
-        }
-      });
-    default:
-      res.writeHead(
-        404,
-        {
-          'Content-Type': 'text/html',
-          'Content-Length': notFoundPage.length
-        }
-      );
-      return res.end(notFoundPage);
-  }
-}
+  const { jwt } = req.cookies;
+  if (!jwt) return send401();
+
+  verify(jwt, SECRET, (err, jwt) => {
+    if (err) return send401();
+    const message = `Your user id is: ${jwt.userId}`;
+    res.set("Content-Length", message.length);
+    res.send(message);
+  });
+});
+
+module.exports = router;
